@@ -11,14 +11,20 @@ return new class extends Migration
      */
 public function up(): void
 {
-    Schema::create('reports', function (Blueprint $table) {
-        $table->id();
-        $table->foreignId('user_id')->constrained(); 
-        $table->string('reported_type'); 
-        $table->unsignedBigInteger('reported_id');
-        $table->text('alasan');
+    Schema::create('ratings', function (Blueprint $table) {
+        $table->id('id_rating');
+        $table->foreignId('id_transaksi')->constrained('transaksis', 'id_transaksi');
+        $table->foreignId('id_penulis')  // User yang memberi rating
+              ->constrained('users', 'id_user');
+        $table->foreignId('id_target')   // User penjual yang diberi rating
+              ->constrained('users', 'id_user');
+        $table->tinyInteger('skor');     // Nilai 1-5
+        $table->text('komentar')->nullable();
         $table->timestamps();
+        // Satu transaksi hanya bisa punya satu rating
+        $table->unique('id_transaksi');
     });
+
 }
 
     /**

@@ -12,19 +12,34 @@ return new class extends Migration
 public function up(): void
 {
     Schema::create('barangs', function (Blueprint $table) {
-        $table->id();
-        $table->foreignId('user_id')->constrained()->onDelete('cascade');
+        $table->id('id_barang');
+        $table->foreignId('id_user')->constrained('users', 'id_user')->onDelete('cascade');
+        // PENTING: kategori disimpan sebagai ENUM, bukan tabel terpisah
+        // Ini membuat dropdown di frontend lebih sederhana
+        $table->enum('kategori', [
+            'Academic Stash',
+            'Dorm Living',
+            'Wardrobe Finds',
+            'Free Items',
+            'Lainnya'
+        ]);
         $table->string('nama_barang');
         $table->text('deskripsi');
-        $table->integer('harga_umum');
-        $table->integer('harga_mahasiswa'); 
-        $table->enum('status', ['available', 'sold'])->default('available');
+        $table->text('spesifikasi')->nullable(); // Wajib untuk Dorm Living
+        $table->decimal('harga_normal', 15, 2);
+        $table->decimal('harga_khusus', 15, 2)->nullable(); // Harga mahasiswa
+        $table->string('radius_lokasi')->nullable();  // Nama area (teks)
+        $table->decimal('latitude', 10, 8)->nullable();
+        $table->decimal('longitude', 11, 8)->nullable();
+        // Status dengan 4 state: available, negotiating, deal_made, sold
+        $table->enum('status', ['available', 'negotiating', 'deal_made', 'sold'])
+              ->default('available');
         $table->boolean('is_negotiable')->default(true);
-        $table->enum('kategori', ['akademik', 'perabot', 'pakaian', 'gratis', 'lainnya']);
-        $table->string('foto')->nullable();
-        $table->text('alamat_jemput')->nullable(); // Alamat spesifik lokasi barang
-        $table->decimal('lat', 10, 8)->nullable(); 
-        $table->decimal('long', 11, 8)->nullable();
+        $table->boolean('is_barter')->default(false);
+        $table->string('keinginan_barter')->nullable(); // Ditukar dengan apa
+        $table->string('foto_barang')->nullable(); // Path foto utama
+        $table->integer('jumlah_laporan')->default(0); // Counter report barang
+        $table->boolean('is_hidden')->default(false); // Disembunyikan oleh sistem
         $table->timestamps();
     });
 }

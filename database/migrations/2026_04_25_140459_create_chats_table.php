@@ -12,13 +12,18 @@ return new class extends Migration
 public function up(): void
 {
     Schema::create('chats', function (Blueprint $table) {
-        $table->id();
-        $table->foreignId('barang_id')->constrained();
-        $table->unsignedBigInteger('pembeli_id');
-        $table->unsignedBigInteger('penjual_id');
+        $table->id('id_pesan');
+        $table->foreignId('id_barang')->constrained('barangs', 'id_barang')
+              ->onDelete('cascade');
+        $table->foreignId('id_pengirim')
+              ->constrained('users', 'id_user')->onDelete('cascade');
+        $table->foreignId('id_penerima')
+              ->constrained('users', 'id_user')->onDelete('cascade');
+        $table->text('isi_pesan');
+        // Tipe pesan: text biasa, atau 'deal' saat tombol Deal diklik
+        $table->enum('tipe', ['text', 'deal', 'system'])->default('text');
+        $table->boolean('sudah_dibaca')->default(false);
         $table->timestamps();
-        $table->foreign('pembeli_id')->references('id')->on('users');
-        $table->foreign('penjual_id')->references('id')->on('users');
     });
 }
 

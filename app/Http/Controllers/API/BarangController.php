@@ -10,134 +10,103 @@ use Illuminate\Support\Facades\Storage;
 
 class BarangController extends Controller
 {
-    // [GET] Ambil semua barang + Filter Search & Radius
+    // ── INDEX: Browse dengan filter ─────────────
     public function index(Request $request)
     {
-        $query = Barang::with('user');
+        $query = Barang::visible() // Scope: is_hidden=false, status != sold
+                       ->with('penjual:id_user,nama,foto_profil'); // Load data penjual
 
-        // Filter Nama
-        if ($request->has('search')) {
-            $query->where('nama_barang', 'like', '%' . $request->search . '%');
-        }
-
-        // Filter Kategori
-        if ($request->has('kategori')) {
+        // ── FILTER KATEGORI ──────────────────────
+        // Request: GET /api/barang?kategori=Dorm+Living
+        if ($request->filled('kategori')) {
             $query->where('kategori', $request->kategori);
         }
 
-        // Filter Radius (Haversine Formula)
-        if ($request->lat && $request->long && $request->radius) {
-            $lat = $request->lat;
-            $long = $request->long;
-            $radius = $request->radius;
-
-            $query->selectRaw("*, (6371 * acos(cos(radians(?)) * cos(radians(lat)) * cos(radians(`long`) - radians(?)) + sin(radians(?)) * sin(radians(lat)))) AS distance", [$lat, $long, $lat])
-                  ->having('distance', '<=', $radius)
-                  ->orderBy('distance', 'asc');
-        } else {
-            $query->latest();
+        // ── FILTER SEARCH ────────────────────────
+        // Request: GET /api/barang?search=laptop
+        if ($request->filled('search')) {
+            $query->where(function($q) use ($request) {
+                $q->where('nama_barang', 'LIKE', '%'.$request->search.'%')
+                  ->orWhere('deskripsi',  'LIKE', '%'.$request->search.'%');
+            });
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => $query->get()
-        ]);
+        // ── FILTER RADIUS 2KM ────────────────────
+        // Request: GET /api/barang?lat=-6.91&lng=107.60&radius=2
+        // Menggunakan Formula Haversine untuk hitung jarak bola bumi
+        if ($request->filled('lat') && $request->filled('lng')) {
+            $lat    = $request->lat;
+            $lng    = $request->lng;
+            $radius = $request->radius ?? 2; // Default 2KM
+
+            $query->selectRaw('*,
+                ( 6371 * acos(
+                    cos(radians(?)) * cos(radians(latitude))
+                    * cos(radians(longitude) - radians(?))
+                    + sin(radians(?)) * sin(radians(latitude))
+                )) AS jarak_km', [$lat, $lng, $lat])
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude')
+                ->having('jarak_km', '<=', $radius)
+                ->orderBy('jarak_km', 'asc'); // Terdekat dulu
+        }
+
+        // ── FILTER IS_NEGOTIABLE ─────────────────
+        if ($request->filled('negotiable')) {
+            $query->where('is_negotiable', true);
+        }
+
+        // Paginate 12 barang per halaman
+        $barangs = $query->paginate(12);
+
+        return response()->json($barangs);
     }
 
-    // [POST] Tambah barang baru (Plus Upload Foto)
-    public function store(Request $request)
+    // ── SHOW: Detail satu barang ─────────────────
+    public function show(Request $request, $id)
     {
-        $validator = Validator::make($request->all(), [
-            'nama_barang'     => 'required',
-            'deskripsi'       => 'required',
-            'harga_umum'      => 'required|integer',
-            'harga_mahasiswa' => 'required|integer',
-            'kategori'        => 'required|in:elektronik,perabot,buku,pakaian,lainnya',
-            'status'          => 'required|in:available,sold,pending',
-            'is_negotiable'   => 'required|boolean',
-            'lat'             => 'required|numeric',
-            'long'            => 'required|numeric',
-            'foto'            => 'required|image|mimes:jpeg,png,jpg|max:2048', // Validasi foto
-        ]);
+        $barang = Barang::with('penjual')->findOrFail($id);
 
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
+        // LOGIKA HARGA KHUSUS MAHASISWA:
+        // Harga khusus HANYA ditampilkan jika user login dan is_student = true
+        $user = $request->user(); // Null jika tidak login
+        if (!$user || !$user->is_student) {
+            $barang->makeHidden('harga_khusus');
         }
 
-        $data = $request->all();
-        
-        // 1. Ambil user_id dari token yang sedang login (lebih aman)
-        $data['user_id'] = auth()->id() ?? $request->user_id;
+        return response()->json($barang);
+    }
 
-        // 2. Logika Simpan Foto
-        if ($request->hasFile('foto')) {
-            $image = $request->file('foto');
-            $image->storeAs('public/barang', $image->hashName());
-            $data['foto'] = $image->hashName();
+    // ── STORE: Upload barang baru ─────────────────
+    public function store(Request $request)
+    {
+        $request->validate([
+            'nama_barang'  => 'required|string|max:255',
+            'kategori'     => 'required|in:Academic Stash,Dorm Living,Wardrobe Finds,Free Items,Lainnya',
+            'deskripsi'    => 'required|string',
+            'harga_normal' => 'required|numeric|min:0',
+            'harga_khusus' => 'nullable|numeric|min:0|lt:harga_normal',
+            'foto_barang'  => 'nullable|image|max:2048', // Max 2MB
+            'latitude'     => 'nullable|numeric',
+            'longitude'    => 'nullable|numeric',
+            // Spesifikasi WAJIB jika kategori Dorm Living
+            'spesifikasi'  => 'required_if:kategori,Dorm Living',
+        ]);
+
+        $data = $request->except('foto_barang');
+        $data['id_user'] = $request->user()->id_user;
+
+        // Handle upload foto
+        if ($request->hasFile('foto_barang')) {
+            $path = $request->file('foto_barang')->store('barang', 'public');
+            $data['foto_barang'] = $path;
         }
 
         $barang = Barang::create($data);
 
         return response()->json([
-            'success' => true,
-            'message' => 'Barang Berhasil Disimpan!',
-            'data'    => $barang
+            'message' => 'Barang berhasil diupload',
+            'barang'  => $barang,
         ], 201);
-    }
-
-    // [GET] Detail 1 barang
-public function show($id)
-{
-    $barang = Barang::with('user')->find($id);
-
-    if (!$barang) {
-        return response()->json(['message' => 'Barang Tidak Ditemukan!'], 404);
-    }
-
-    // Logika harga otomatis berdasarkan status mahasiswa
-    $user = auth('sanctum')->user();
-    $tampilkanHargaKhusus = $user && $user->is_mahasiswa; 
-
-    return response()->json([
-        'success' => true,
-        'data' => [
-            'id' => $barang->id,
-            'nama_barang' => $barang->nama_barang,
-            'deskripsi' => $barang->deskripsi,
-            'harga_tampil' => $tampilkanHargaKhusus ? $barang->harga_mahasiswa : $barang->harga_umum,
-            'is_student_price' => $tampilkanHargaKhusus,
-            'penjual' => $barang->user->name,
-            'foto' => url('storage/barang/' . $barang->foto),
-        ]
-    ]);
-}
-
-    // [PUT] Update barang
-    public function update(Request $request, $id)
-    {
-        $barang = Barang::find($id);
-        if (!$barang) return response()->json(['message' => 'Tidak ditemukan'], 404);
-
-        $barang->update($request->all());
-        return response()->json(['success' => true, 'data' => $barang]);
-    }
-
-    // [DELETE] Hapus barang
-    public function destroy($id)
-    {
-        $barang = Barang::find($id);
-        if (!$barang) return response()->json(['message' => 'Tidak ditemukan'], 404);
-
-        // Hapus foto dari storage jika ada
-        Storage::delete('public/barang/'.$barang->foto);
-        $barang->delete();
-
-        return response()->json(['success' => true, 'message' => 'Terhapus']);
-    }
-
-    public function userBarang($id)
-    {
-        $barangs = Barang::where('user_id', $id)->get();
-        return response()->json(['success' => true, 'data' => $barangs]);
     }
 }

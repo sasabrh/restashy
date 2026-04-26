@@ -12,19 +12,23 @@ return new class extends Migration
 public function up(): void
 {
     Schema::create('users', function (Blueprint $table) {
-        $table->id();
-        $table->string('name');
+        $table->id('id_user');
+        $table->string('nama');
         $table->string('email')->unique();
-        $table->timestamp('email_verified_at')->nullable();
         $table->string('password');
-        $table->string('nomor_wa')->nullable();
-        $table->boolean('is_mahasiswa')->default(false);
-        $table->text('alamat')->nullable(); 
-        $table->decimal('lat', 10, 8)->nullable(); 
-        $table->decimal('long', 11, 8)->nullable();
+        $table->string('kontak')->nullable();
+        $table->text('alamat')->nullable();
+        $table->decimal('latitude', 10, 8)->nullable();  // Koordinat GPS user
+        $table->decimal('longitude', 11, 8)->nullable(); // Koordinat GPS user
+        $table->boolean('is_student')->default(false);   // TRUE jika email kampus
+        $table->string('foto_profil')->nullable();
+        $table->integer('laporan_diterima')->default(0); // Counter report
+        $table->boolean('is_banned')->default(false);    // Akun diblokir?
+        $table->timestamp('email_verified_at')->nullable();
         $table->rememberToken();
         $table->timestamps();
     });
+
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();

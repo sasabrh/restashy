@@ -12,12 +12,19 @@ return new class extends Migration
 public function up(): void
 {
     Schema::create('ratings', function (Blueprint $table) {
-        $table->id();
-        $table->foreignId('transaksi_id')->constrained();
-        $table->integer('bintang'); 
+        $table->id('id_rating');
+        $table->foreignId('id_transaksi')->constrained('transaksis', 'id_transaksi');
+        $table->foreignId('id_penulis')  // User yang memberi rating
+              ->constrained('users', 'id_user');
+        $table->foreignId('id_target')   // User penjual yang diberi rating
+              ->constrained('users', 'id_user');
+        $table->tinyInteger('skor');     // Nilai 1-5
         $table->text('komentar')->nullable();
         $table->timestamps();
+        // Satu transaksi hanya bisa punya satu rating
+        $table->unique('id_transaksi');
     });
+
 }
 
     /**

@@ -21,27 +21,42 @@ Route::get('/kategori', function() {
     ]);
 });
 
-/* --- Protected Routes (Wajib Login) --- */
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login',    [AuthController::class, 'login']);
+Route::get('/barang',    [BarangController::class, 'index']);  // Browse semua
+Route::get('/barang/{id}', [BarangController::class, 'show']); // Detail barang
+
+// ── PROTECTED ROUTES (butuh login / token) ─────
 Route::middleware('auth:sanctum')->group(function () {
-    // Auth & User
-    Route::get('/me', [AuthController::class, 'me']);
+    // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me',      [AuthController::class, 'me']);
+    Route::put('/me',      [AuthController::class, 'updateProfile']);
 
-    // Barang (Hanya untuk Store, Update, Delete)
-    Route::post('/barang', [BarangController::class, 'store']);
-    Route::put('/barang/{id}', [BarangController::class, 'update']);
+    // Barang (CRUD — hanya pemilik yang bisa edit/hapus)
+    Route::post('/barang',        [BarangController::class, 'store']);
+    Route::put('/barang/{id}',    [BarangController::class, 'update']);
     Route::delete('/barang/{id}', [BarangController::class, 'destroy']);
-    Route::get('/my-barang', [BarangController::class, 'userBarang']); // Barang milik saya
+    Route::get('/my-barang',      [BarangController::class, 'myBarang']);
 
-    // Wishlist
-    Route::get('/wishlist', [WishlistController::class, 'index']);
-    Route::post('/wishlist', [WishlistController::class, 'store']);
-
-    // Chat & Nego
-    Route::post('/chat', [ChatController::class, 'sendMessage']);
-    Route::get('/chat/{barang_id}', [ChatController::class, 'getChatHistory']);
-    Route::post('/chat/deal', [ChatController::class, 'deal']); // Route untuk tombol DEAL
+    // Chat & Deal
+    Route::get('/chat/{id_barang}',    [ChatController::class, 'getChat']);
+    Route::post('/chat',               [ChatController::class, 'kirimPesan']);
+    Route::post('/chat/deal',          [ChatController::class, 'buatDeal']);
+    Route::get('/chat/list',           [ChatController::class, 'daftarChat']);
 
     // Transaksi
-    Route::post('/transaksi/{id}/complete', [TransaksiController::class, 'completeTransaction']);
+    Route::get('/transaksi',           [TransaksiController::class, 'index']);
+    Route::put('/transaksi/{id}',      [TransaksiController::class, 'updateStatus']);
+
+    // Rating
+    Route::post('/rating',             [RatingController::class, 'store']);
+
+    // Wishlist
+    Route::get('/wishlist',            [WishlistController::class, 'index']);
+    Route::post('/wishlist',           [WishlistController::class, 'store']);
+    Route::delete('/wishlist/{id}',    [WishlistController::class, 'destroy']);
+
+    // Report
+    Route::post('/report',             [ReportController::class, 'store']);
 });
